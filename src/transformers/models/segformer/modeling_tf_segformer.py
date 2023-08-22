@@ -757,20 +757,23 @@ class TFSegformerForSemanticSegmentation(TFSegformerPreTrainedModel):
         # `labels` is of shape (batch_size, height, width)
         label_interp_shape = shape_list(labels)[1:]
 
-        upsampled_logits = tf.image.resize(logits, size=label_interp_shape, method="bilinear")
+        logits = tf.image.resize(logits, size=label_interp_shape, method="bilinear")
+
+
+
         # compute weighted loss
-        loss_fct = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction="none")
+        loss_fct = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction="none")
 
-        def masked_loss(real, pred):
-            unmasked_loss = loss_fct(real, pred)
-            mask = tf.cast(real != self.config.semantic_loss_ignore_index, dtype=unmasked_loss.dtype)
-            masked_loss = unmasked_loss * mask
-            # Reduction strategy in the similar spirit with
-            # https://github.com/huggingface/transformers/blob/main/src/transformers/modeling_tf_utils.py#L210
-            reduced_masked_loss = tf.reduce_sum(masked_loss) / tf.reduce_sum(mask)
-            return tf.reshape(reduced_masked_loss, (1,))
+        logits = tf.reshape(logits, [-1])
+        labels = tf.reshape(labels, [-1])
 
-        return masked_loss(labels, upsampled_logits)
+        logits = tf.sigmoid(logits)
+
+        loss = loss_fct(labels, logits)
+        loss = tf.reduce_sum(loss)
+        loss = tf.reshape(loss, (1,))
+
+        return loss
 
     @unpack_inputs
     @add_start_docstrings_to_model_forward(SEGFORMER_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
@@ -829,10 +832,7 @@ class TFSegformerForSemanticSegmentation(TFSegformerPreTrainedModel):
 
         loss = None
         if labels is not None:
-            if not self.config.num_labels > 1:
-                raise ValueError("The number of labels should be greater than one")
-            else:
-                loss = self.hf_compute_loss(logits=logits, labels=labels)
+            loss = self.hf_compute_loss(logits=logits, labels=labels)
 
         # make logits of shape (batch_size, num_labels, height, width) to
         # keep them consistent across APIs
