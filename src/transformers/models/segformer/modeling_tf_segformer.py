@@ -762,7 +762,7 @@ class TFSegformerForSemanticSegmentation(TFSegformerPreTrainedModel):
 
 
         # compute weighted loss
-        loss_fct = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction="none")
+        loss_fct = tf.keras.losses.BinaryCrossentropy(from_logits=False, reduction="none")
 
         logits = tf.reshape(logits, [-1])
         labels = tf.reshape(labels, [-1])
